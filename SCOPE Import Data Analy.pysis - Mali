@@ -1,0 +1,156 @@
+import os
+import datetime
+import keyring
+import time
+import shutil
+
+from difflib import SequenceMatcher
+import difflib
+
+
+import pandas as pd
+pd.set_option("display.max_columns", None) # To display all the columns in the output
+pd.set_option("display.max_rows", None) # To display all the rows in the output
+import numpy as np
+pd.set_option('mode.chained_assignment', None)
+
+from openpyxl import load_workbook
+
+
+%matplotlib inline
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+import pyhdb # python hana db connection
+from hdbcli import dbapi # SAP HANA database API
+
+# check versions
+print(f'Pandas version: {pd.__version__}')
+print(f'Numpy version: {np.__version__}')
+print(f'Seaborn version: {sns.__version__}')
+# Date of last run
+print(datetime.datetime.now().ctime())
+# Set Parameters
+country = "Mali" # set country name for the filter
+country_code = 'ML'
+project_name = 'Listes beneficiaires ACT12 FS'
+country_dir = "../../COs/{}/{}/".format(country, project_name)
+template_file = "../../Templates/Importation Template.xlsx"
+parquet_dir = "../../COs/{}/parquets/".format(country)
+data_dir = country_dir + "data/" #set output directory to place parquet
+output = country_dir + "output/"
+correct_length_of_CNI = 13
+# Check if your directories exists
+if os.path.isdir(country_dir):
+    print('Your directory {} exists'.format(country_dir))
+    
+if os.path.isdir(data_dir):
+    print('The data directory {} exists'.format(data_dir))
+
+if os.path.isdir(output):
+    print('The output directory {} exists'.format(output))
+    
+    
+shutil.copyfile(template_file, output+'Importation Template.xlsx')
+#Helpers function
+def first_letters(s, num_letter=2):
+    return s.str[:num_letter].str.upper()
+
+def plotDataFrame_Bar(d,type , title):
+    fig, ax = plt.subplots(figsize =(16, 9))
+    ax.barh(d[type], d['Counts'])
+    for s in ['top', 'bottom', 'left', 'right']:
+        ax.spines[s].set_visible(False)
+        
+    x = d[type]
+    y = d['Counts']
+    # Set the x ticks
+    ax.set_yticks(d[type])
+    # Remove x, y Ticks
+    
+    ax.xaxis.set_ticks_position('none')
+    ax.yaxis.set_ticks_position('none')
+    
+    # add labels to the bar
+    
+    # Add padding between axes and labels
+    ax.xaxis.set_tick_params(pad = 10)
+    ax.yaxis.set_tick_params(pad = 1)
+    
+    # Add x, y gridlines
+    ax.grid(b= True, color ='blue', linestyle ='-.', linewidth =1, alpha = 0.2)
+    
+    for i in ax.patches:
+        plt.text(i.get_width()+0.2, i.get_y()+0.5,
+                 str(round((i.get_width()), 2)),
+                 fontsize = 10, fontweight ='bold',
+                 color ='grey')
+    
+    ax.set_title(title, loc='center',)
+    
+    plt.show()
+    
+def createDFforLengthDist(df, column, type):
+    d = (pd.value_counts(df[column].values, sort=True)).to_frame()
+    d.reset_index(inplace = True)
+    d = d.rename(columns={0:'Counts', 'index':type})
+    d = d.sort_values(by=type)
+    return d
+
+def removeUnnamedColumn(df):
+    for c in df.columns:
+        if c.__contains__('Unnamed'):
+            df.drop(c, inplace=True, axis=1)
+            
+def percentNullValues(df, column):
+    percent = round(df[column].isna().sum()/len(df) * 100, 2)
+    print(f'for the columns {column}, you have {percent} % null values')
+    
+def save_to_excel(df, filename):
+    df.to_excel(output + filename + '.xlsx')
+    
+def similar(a, b):
+    return SequenceMatcher(None, a, b).ratio()
+
+def wuzzyfuzzy(df1, df2):
+    myList = []
+    total = len(df1)
+    possibilities = list(df2.FDP.sort_values())
+
+    s = SequenceMatcher(isjunk=None, autojunk=False)
+
+    for idx1, df1_str in enumerate(df1.Location.str.capitalize()):
+        # get 1 best match that has a ratio of at least 0.7
+        best_match = difflib.get_close_matches(df1_str, possibilities, 1, 0.7)
+        s.set_seqs(df1_str, best_match)
+        myList.append(best_match)
+
+    return myList
+
+def createDFforLengthDist(df, column, type):
+    d = (pd.value_counts(df[column].values, sort=True)).to_frame()
+    d.reset_index(inplace = True)
+    d = d.rename(columns={0:'Counts', 'index':type})
+    d = d.sort_values(by=type)
+    return d
+    f_template = pd.read_excel(template_file, skiprows=1)
+removeUnnamedColumn(df_template)
+df_template.head()
+dfi = []
+files = os.listdir(data_dir)
+for file in files:
+    if file.endswith('.xlsx'):
+        data = pd.read_excel(data_dir + file, sheet_name='Data', skiprows=2)
+        for i in range(3):
+            print(f'for the file {os.path.basename(file)} the first column is {data.columns[0]} at skiprows {i}')
+            if data.columns[0] == 'Household Name':
+                data['Filename'] = os.path.basename(file)
+                dfi.append(data)
+                break
+            else:
+                data = pd.read_excel(data_dir + file, sheet_name='Data', skiprows=i)
+                continue
+                len(dfi)
+                
+                for i in dfi:
+    print(i.Filename.unique())
